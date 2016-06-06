@@ -161,7 +161,8 @@ def one_fold(t, i, results, logs):
         if attention is not None:
             attention_mems = list()
         vec, c, loss = best_rnn(tree, attention_mems, best_classifier, True)
-        tree.render_graph(graph_dirs[i], 'test{}'.format(testi), True)
+        if render_flag:
+            tree.render_graph(graph_dirs[i], 'test{}'.format(testi), True)
 
         label = best_classifier.label
         dist = best_classifier.dist
@@ -195,6 +196,7 @@ clip_grad = args.get_clip_grad()
 opt = args.get_optimizer()
 composition = args.get_composition()
 is_toy = args.is_toy()
+render_flag = args.render_grpah()
 
 vocab = Vocablary()
 vocab.read_vocabl(data['vocab'])

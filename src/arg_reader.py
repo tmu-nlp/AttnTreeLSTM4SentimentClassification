@@ -18,8 +18,9 @@ from chainer import optimizers
 @decoparser.option('--regression', action='store_true')
 @decoparser.option('--toy', action='store_true')
 @decoparser.option('--pol-dict', choices=('pn', 'pnn'))
-def get_arg(arg, kind, logdir, optimizer, lr, l2, clip_grad, mem_units, attention, toy, pol_dict, regression, composition, lang):
-    args = ['kind', 'logdir', 'lr', 'l2', 'clip_grad', 'attention', 'toy', 'pol_dict', 'optimizer', 'mem_units', 'regression', 'composition', 'lang']
+@decoparser.option('--not-render', action='store_false', default=True)
+def get_arg(arg, kind, logdir, optimizer, lr, l2, clip_grad, mem_units, attention, toy, pol_dict, regression, composition, lang, not_render):
+    args = ['kind', 'logdir', 'lr', 'l2', 'clip_grad', 'attention', 'toy', 'pol_dict', 'optimizer', 'mem_units', 'regression', 'composition', 'lang', 'not_render']
     d = dict()
     for a in args:
         d[a] = eval(a)
@@ -50,6 +51,7 @@ class ArgReader:
         self.__clip_grad = get_arg('clip_grad')
         self.__composition = get_arg('composition')
         self.__n_units = 200
+        self.__render_graph = get_arg('not_render')
         if self.__lang == 'En':
             self.__n_units = 300
 
@@ -204,6 +206,9 @@ class ArgReader:
 
     def is_toy(self):
         return self.__is_toy
+
+    def render_grpah(self):
+        return self.__render_graph
 
     def output_result(self, test, dev):
         resultf = self.__logdir + '/result.pkl'
