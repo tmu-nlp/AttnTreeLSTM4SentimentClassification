@@ -207,7 +207,6 @@ logs = mp.Queue()
 
 
 # exec
-fold = 1
 offset = 4
 progress_m = get_progress_manager()
 pts = [progress_m.new_tree(offset * i) for i in range(fold)]
