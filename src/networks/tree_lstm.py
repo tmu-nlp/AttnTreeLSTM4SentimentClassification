@@ -36,6 +36,8 @@ class TreeLSTM(chainer.Chain):
                     self.embed.W.data[i] = vec
 
     def __call__(self, tree, attention_mems, classifier=None, visualize=False):
+        while len(tree.children) == 1 and not tree.is_leaf():
+            tree = tree.children[0]
         if tree.is_leaf():
             word = tree.get_word()
             # avg
