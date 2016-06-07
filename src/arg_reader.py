@@ -73,15 +73,15 @@ class ArgReader:
         en_embedf = data_dir + '/vector/glove/glove.840B.300d.txt'
         if self.__lang == 'Ja':
             if self.__mode == 'constituency':
-                data = data_dir + '/ntcirj/ckylark/data.pkl'
+                data = data_dir + '/ntcirj/ckylark/data.pkl.bz2'
                 self.__embedf = kytea_embedf
             elif self.__mode == 'dependency':
-                data = data_dir + '/ntcirj/cabocha/data.pkl'
+                data = data_dir + '/ntcirj/cabocha/data.pkl.bz2'
                 self.__embedf = mecab_embedf
         elif self.__lang == 'En':
             self.__embedf = en_embedf
-            data = data_dir + '/ntcire/ckylark/data.pkl'
-        data = pickle.load(open(data, 'rb'))
+            data = data_dir + '/ntcire/ckylark/data.pkl.bz2'
+        data = utils.read_pkl_bz2(data)
         if self.__is_toy:
             data = data['toy']
         if self.__dict == 'pn':
