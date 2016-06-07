@@ -2,7 +2,6 @@ import os
 import sys
 import bz2
 import pickle
-from progressbar import ProgressBar, Counter, Bar, Percentage
 import chainer
 import numpy as np
 
