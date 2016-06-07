@@ -73,6 +73,11 @@ def one_fold(t, i, results, logs):
     test_len = len(test_data)
     dev_len = len(dev_data)
 
+    vocab = Vocablary()
+    vocab.read_vocabl(data['vocab'])
+    if not is_toy:
+        vocab.read_embed(embedf)
+
     if composition == 'SLSTM':
         rnn = SLSTM(vocab, n_units, mem_units, is_regression, is_leaf_as_chunk=mode == 'dependency')
     elif composition == 'TreeLSTM':
@@ -198,10 +203,6 @@ composition = args.get_composition()
 is_toy = args.is_toy()
 render_flag = args.render_grpah()
 
-vocab = Vocablary()
-vocab.read_vocabl(data['vocab'])
-if not is_toy:
-    vocab.read_embed(embedf)
 
 
 results = mp.Manager().dict()
