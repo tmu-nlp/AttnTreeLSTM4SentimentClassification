@@ -1,5 +1,7 @@
 import os
 import sys
+import bz2
+import pickle
 from progressbar import ProgressBar, Counter, Bar, Percentage
 import chainer
 import numpy as np
@@ -28,26 +30,11 @@ def get_data_path():
     return path
 
 
-def progressbar(iterable, maxval, message=' ', nested=False, nest_num=1):
-    if message != ' ':
-        message = ' "{}"'.format(message)
-    wid = [Percentage(), ' ', Counter(), '/{}'.format(maxval), message, Bar()]
-    pbar = ProgressBar(maxval=maxval, widgets=wid)
-    if nested:
-        sys.stdout.write('\n')
-    for i, item in enumerate(iterable):
-        pbar.update(pbar.value + 1)
-        sys.stdout.flush()
-        yield item
-    pbar.finish()
-    sys.stdout.flush()
-    if nested:
-        sys.stdout.write('\x1b[1A')
-        sys.stdout.write('\x1b[1A')
-        sys.stdout.write('\r')
-        sys.stdout.flush()
-    for _ in range(nest_num - 1):
-        sys.stdout.write('\n')
+def read_pkl_bz2(fname):
+    with open(fname, 'rb') as f:
+        data = f.read()
+    compressed = bz2.decompress(data)
+    return pickle.loads(compressed)
 
 
 def get_line_num(path):
