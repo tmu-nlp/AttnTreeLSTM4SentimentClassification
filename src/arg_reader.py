@@ -19,8 +19,9 @@ from chainer import optimizers
 @decoparser.option('--toy', action='store_true')
 @decoparser.option('--pol-dict', choices=('pn', 'pnn'))
 @decoparser.option('--not-render', action='store_false', default=True)
-def get_arg(arg, kind, logdir, optimizer, lr, l2, clip_grad, mem_units, attention, toy, pol_dict, regression, composition, lang, not_render):
-    args = ['kind', 'logdir', 'lr', 'l2', 'clip_grad', 'attention', 'toy', 'pol_dict', 'optimizer', 'mem_units', 'regression', 'composition', 'lang', 'not_render']
+@decoparser.option('--not-embed', action='store_true')
+def get_arg(arg, kind, logdir, optimizer, lr, l2, clip_grad, mem_units, attention, toy, pol_dict, regression, composition, lang, not_render, not_embed):
+    args = ['kind', 'logdir', 'lr', 'l2', 'clip_grad', 'attention', 'toy', 'pol_dict', 'optimizer', 'mem_units', 'regression', 'composition', 'lang', 'not_render', 'not_embed']
     d = dict()
     for a in args:
         d[a] = eval(a)
@@ -54,6 +55,7 @@ class ArgReader:
         self.__render_graph = get_arg('not_render')
         if self.__lang == 'En':
             self.__n_units = 300
+        self.__not_embed = get_arg('not_embed')
 
         # optimizer
         self.__opt_name = get_arg('optimizer')
@@ -216,3 +218,6 @@ class ArgReader:
         d['test'] = test
         d['dev'] = dev
         pickle.dump(d, open(resultf, 'wb'))
+
+    def use_embed(self):
+        return not self.__not_embed

@@ -73,10 +73,16 @@ def one_fold(t, i, results, logs):
     test_len = len(test_data)
     dev_len = len(dev_data)
 
+    flog = open(fold_dir + '/{}.txt'.format(i), 'w')
+
+    print('reading vocablary', file=flog, flush=True)
     vocab = Vocablary()
     vocab.read_vocabl(data['vocab'])
-    if not is_toy:
+    if not is_toy and use_embed:
+        print('reading initial embedding', file=flog, flush=True)
         vocab.read_embed(embedf)
+    print('vocab init fin', file=flog, flush=True)
+
 
     if composition == 'SLSTM':
         rnn = SLSTM(vocab, n_units, mem_units, is_regression, is_leaf_as_chunk=mode == 'dependency')
@@ -94,10 +100,9 @@ def one_fold(t, i, results, logs):
     optimizer2.add_hook(chainer.optimizer.WeightDecay(l2))
     optimizer2.add_hook(chainer.optimizer.GradientClipping(clip_grad))
 
-    flog = open(fold_dir + '/{}.txt'.format(i), 'w')
     # training
     best_root = -100
-    print('start train')
+    print('start train', file=flog, flush=True)
     for epoch in t('Fold{}: Epoch'.format(i), maxv=n_epoch, order=1, nest=0)(range(n_epoch)):
         # shuufle data
         random.shuffle(train_data)
@@ -202,7 +207,7 @@ opt = args.get_optimizer()
 composition = args.get_composition()
 is_toy = args.is_toy()
 render_flag = args.render_grpah()
-
+use_embed = args.use_embed()
 
 
 results = mp.Manager().dict()
