@@ -67,6 +67,8 @@ class ArgReader:
             self.__opt = lambda: optimizers.Adam(alpha=self.__lr)
         elif self.__opt_name == 'NesterovAg':
             self.__opt = lambda: optimizers.NesterovAG(lr=self.__lr)
+        elif self.__opt_name == 'AdaGrad':
+            self.__opt = lambda: optimizers.AdaGrad(lr=self.__lr)
 
         # data
         data_dir = utils.get_data_path()
