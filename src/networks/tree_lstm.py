@@ -16,10 +16,8 @@ class Composition(Enum):
 
 
 class TreeLSTM(chainer.Chain):
-
     def __init__(self, vocab, n_units, mem_units, comp_type=Composition.tree_lstm, is_regression=False, train=True, is_leaf_as_chunk=False):
         n_vocab = vocab.get_vocab_size()
-
         super().__init__(
             embed=L.EmbedID(n_vocab, n_units),
             embed2hidden=L.Linear(n_units, mem_units),
@@ -47,9 +45,11 @@ class TreeLSTM(chainer.Chain):
                     vec = self.__vocab.embed_model[word]
                     self.embed.W.data[i] = vec
 
-    def __call__(self, tree, attention_mems, classifier=None, visualize=False):
+    def __call__(self, tree):
+        # skip the node if whose child is only one
         while len(tree.children) == 1 and not tree.is_leaf():
             tree = tree.children[0]
+
         if tree.is_leaf():
             word = tree.get_word()
             # avg
@@ -70,12 +70,14 @@ class TreeLSTM(chainer.Chain):
                 embed = self.embed(one_hot)
                 vector = self.embed2hidden(embed)
             c = Variable(np.zeros((1, self.mem_units), dtype=np.float32))
-            total_loss = 0
         else:
             left_tree, right_tree = tree.children
-            left_vec, leftc, left_loss = self(left_tree, attention_mems, classifier, visualize)
-            right_vec, rightc, right_loss = self(right_tree, attention_mems, classifier, visualize)
+            leftc = self(left_tree)
+            rightc = self(right_tree)
+            left_vec = left_tree.data['vector']
+            right_vec = right_tree.data['vector']
 
+            # composition by tree lstm
             concat = F.concat((left_vec, right_vec, leftc, rightc))
             u_l = self.updatel(concat)
             u_r = self.updater(concat)
@@ -95,25 +97,5 @@ class TreeLSTM(chainer.Chain):
             r_v = F.concat((u_r, i_r, f_r, o_r))
             c, vector = F.slstm(leftc, rightc, l_v, r_v)
 
-            total_loss = left_loss + right_loss
-
-        if classifier is not None:
-            label = None
-            if 'label' in tree.get_label():
-                typ = int
-                if self.is_regression:
-                    typ = float
-                label = typ(tree.get_label().split('label:')[1].split(',')[0])
-            elif tree.get_label().isdigit():
-                typ = int
-                if self.is_regression:
-                    typ = float
-                label = typ(tree.get_label())
-            if label is not None:
-                y, loss = classifier(vector, label, attention_mems, tree.is_root(), self.is_regression, tree if visualize else None)
-                total_loss += loss
-        if attention_mems is not None:
-            attention_mems.append(vector)
-            if visualize:
-                tree.data[tuple(vector.data.flatten().tolist())] = None
-        return vector, c, total_loss
+        tree.data['vector'] = vector
+        return c

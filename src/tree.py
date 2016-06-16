@@ -3,11 +3,7 @@ from graphviz import Digraph
 
 
 class Tree:
-    count = 0
-
-    def __init__(self, s_fomula=None, root=None, parent=None, nltree=None, i=None):
-        self.i = Tree.count
-        Tree.count += 1
+    def __init__(self, s_fomula=None, root=None, parent=None, nltree=None):
         self.data = dict()
         self.data['render_label'] = list()
         self.children = list()
@@ -25,26 +21,22 @@ class Tree:
                 for i in range(len(self.__nltree)):
                     self.children.append(Tree(root=self.__root, parent=self, nltree=self.__nltree[i]))
 
-    def render_graph(self, fdir, fname, with_data=False):
+    def render_graph(self, fdir, fname, get_label=lambda tree: tree.get_label(), get_fill_color=lambda tree: '#ffffff', get_color=lambda tree: '#000000', get_peripheries=lambda tree: '1'):
         def recursive(t, g):
             for c in t.children:
-                additional = ''
-                if with_data:
-                    additional = '|'.join(c.data['render_label'])
-                if c.is_leaf():
-                    g.node(str(c.i), c.get_word() + additional, fontsize='20')
-                else:
-                    g.node(str(c.i), additional)
-                g.edge(str(t.i), str(c.i), dir='back')
+                label = get_label(c)
+                g.node(str(id(c)), label, fontsize='20', style='filled', fillcolor=get_fill_color(c), color=get_color(c), peripheries=get_peripheries(c))
+                g.edge(str(id(t)), str(id(c)), dir='back')
                 recursive(c, g)
 
+        # define graph
         g = Digraph(format='png', filename=fname, directory=fdir)
         g.attr('node', shape='box')
         g.attr('graph', randkdir='BT', concentrate='true', charset='UTF-8')
-        additional = ''
-        if with_data:
-            additional = '|'.join(self.data['render_label'])
-        g.node(str(self.i), additional)
+
+        # make graph
+        label = get_label(self)
+        g.node(str(id(self)), label, fontsize='20', style='filled', fillcolor=get_fill_color(self), color=get_color(self), peripheries=get_peripheries(self))
         recursive(self, g)
         g.render(cleanup=True)
 

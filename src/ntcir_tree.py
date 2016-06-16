@@ -89,7 +89,7 @@ def one_fold(t, i, results, logs):
     optimizer.add_hook(chainer.optimizer.WeightDecay(l2))
     optimizer.add_hook(chainer.optimizer.GradientClipping(clip_grad))
 
-    classifier = AttentionClassifier(mem_units, label_num, method=attention)
+    classifier = AttentionClassifier(mem_units, label_num, attention_method)
     optimizer2 = opt()
     optimizer2.setup(classifier)
     optimizer2.add_hook(chainer.optimizer.WeightDecay(l2))
@@ -108,11 +108,10 @@ def one_fold(t, i, results, logs):
         classifier.init_count()
         for line in t('Training', maxv=train_len, order=2, nest=1)(train_data):
             tree = Tree(line)
-            attention_mems = None
-            if attention is not None:
-                attention_mems = list()
-            vec, c, loss = rnn(tree, attention_mems, classifier)
-            accum_loss += loss
+            # compute and assign vector to each node of tree
+            rnn(tree)
+            # classify polarity for each node who has correct label
+            accum_loss += classifier(tree)
             count += 1
             if batch_size <= count:
                 count = 0
@@ -140,10 +139,10 @@ def one_fold(t, i, results, logs):
         classifier.init_count()
         for line in t('Develop', maxv=dev_len, order=3, nest=1)(dev_data):
             tree = Tree(line)
-            attention_mems = None
-            if attention is not None:
-                attention_mems = list()
-            vec, c, loss = rnn(tree, attention_mems, classifier)
+            # compute and assign vector to each node of tree
+            rnn(tree)
+            # classify polarity for each node who has correct label
+            loss = classifier(tree)
         root_acc = classifier.calc_acc()
         logs.put('{}dev ep{}: acc={:0>2}'.format(i, epoch, root_acc))
         if best_root < root_acc:
@@ -162,18 +161,46 @@ def one_fold(t, i, results, logs):
     results['dev{}'.format(i)] = best_root
     for testi, line in enumerate(t('Test', maxv=test_len, order=4, nest=1)(test_data)):
         tree = Tree(line)
-        attention_mems = None
-        if attention is not None:
-            attention_mems = list()
-        vec, c, loss = best_rnn(tree, attention_mems, best_classifier, True)
-        if render_flag:
-            tree.render_graph(graph_dirs[i], 'test{}'.format(testi), True)
+        # compute and assign vector to each node of tree
+        rnn(tree)
+        # classify polarity for each node who has correct label
+        loss = best_classifier(tree)
 
-        label = best_classifier.label
-        dist = best_classifier.dist
-        pred = best_classifier.pred
-        res = 'True' if pred == label else 'False'
-        print('result:{}, label:{}, dist:{}, {}'.format(res, label, dist, line[:-1]), file=fw)
+        # logging
+        if render_flag:
+            def get_label(tree):
+                label = list()
+                if 'correct_pred' in tree.data:
+                    label.append(tree.data['correct_pred'])
+                if 'attention_weight' in tree.data:
+                    label.append('{:.5f}'.format(float(tree.data['attention_weight'].data)))
+                if tree.is_leaf():
+                    label.append(tree.get_word())
+                return '\n'.join(label)
+            def get_fill_color(tree):
+                if 'top1' in tree.data:
+                    return '#ff0000'
+                if 'top2' in tree.data:
+                    return '#ff3f3f'
+                if 'top3' in tree.data:
+                    return '#ff7e7e'
+                if 'top4' in tree.data:
+                    return '#ffbdbd'
+                if 'top5' in tree.data:
+                    return '#ffc8c8'
+                return '#ffffff'
+            def get_color(tree):
+                if 'is_correct' in tree.data and tree.data['is_correct']:
+                    return '#0033ff'
+                if 'correct_pred' in tree.data:
+                    return '#dd0000'
+                return '#000000'
+            def get_peripheries(tree):
+                if 'correct_pred' in tree.data:
+                    return '3'
+                return '1'
+            tree.render_graph(graph_dirs[i], 'test{}'.format(testi), get_label, get_fill_color, get_color, get_peripheries)
+        print('{}, {}, dist:{}, {}'.format(tree.data['is_correct'], tree.data['correct_pred'], tree.data['dist'], line[:-1]), file=fw)
     fw.close()
     acc = best_classifier.calc_acc()
     logs.put('{}test: acc={:0>2}'.format(i, acc))
@@ -189,7 +216,7 @@ embedf = args.get_embedf()
 data = args.get_data()
 logf, progf, model_dir, ex_dir, fold_dir, graph_dirs = args.get_logfiles()
 is_regression = args.is_regression()
-attention = args.get_attention()
+attention_method = args.get_attention()
 n_units = args.get_n_units()
 mem_units = args.get_mem_units()
 batch_size = args.get_batch_size()

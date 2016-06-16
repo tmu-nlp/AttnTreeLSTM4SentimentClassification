@@ -6,7 +6,7 @@ import utils
 
 
 class AttentionClassifier(chainer.Chain):
-    def __init__(self, mem_units, label_num, method='only'):
+    def __init__(self, mem_units, label_num, attention_method, is_regression=False):
         super().__init__(
             atw1=L.Linear(mem_units, mem_units),
             atw1con=L.Linear(2 * mem_units, mem_units),
@@ -18,81 +18,121 @@ class AttentionClassifier(chainer.Chain):
             out_class=L.Linear(mem_units, label_num),
             out_reg=L.Linear(mem_units, 1))
         self.__count = {'total_root': 0, 'correct_root': 0}
-        self.__method = method
+        self.__attention_method = attention_method
+        self.__is_regression = is_regression
 
-    def __call__(self, x, correct=None, attention_mems=None, is_root=True, regression=False, tree=None):
-        attention = self.calc_attention(x, attention_mems, tree)
-        y = self.classify(x, attention, regression)
+    def __call__(self, tree):
+        total_loss = 0
+        for subtree in tree.subtrees():
+            loss, is_correct = self.classify_one(subtree)
+            if loss is not None:
+                total_loss += loss
 
-        loss = None
-        if correct is not None:
-            self.label = correct
-            if regression:
-                correct = chainer.Variable(numpy.array([[correct]], dtype=numpy.float32))
-                loss = F.mean_squared_error(y, correct)
-                self.dist = y.data
-                self.pred = 1 if float(y.data) >= 0.5 else 0
-            else:
-                correct = utils.num2onehot(correct)
-                loss = F.softmax_cross_entropy(y, correct)
-                self.dist = F.softmax(y).data
-                self.pred = numpy.argmax(self.dist)
+        # to log the attention weights for root node, root node should be classified lastly
+        loss, is_correct = self.classify_one(tree)
+        total_loss += loss
+        self.__count['total_root'] += 1
+        if is_correct:
+            self.__count['correct_root'] += 1
+        return total_loss
 
-            if is_root:
-                self.__count['total_root'] += 1
-                if tree is not None:
-                    tree.data['render_label'].append('T:{},Y:{}'.format(correct.data[0], self.pred))
-            if correct.data[0] == self.pred:
-                if is_root:
-                    self.__count['correct_root'] += 1
-        return y, loss
+    def classify_one(self, tree):
+        label = None
+        # get label
+        if 'label' in tree.get_label():
+            typ = int
+            if self.__is_regression:
+                typ = float
+            label = typ(tree.get_label().split('label:')[1].split(',')[0])
+        elif tree.get_label().isdigit():
+            typ = int
+            if self.__is_regression:
+                typ = float
+            label = typ(tree.get_label())
 
-    def classify(self, x, attention, regression):
-        if attention is not None:
-            if regression:
-                y = F.sigmoid(self.atout_reg(F.concat((x, attention))))
-            else:
-                y = self.atout_class(F.concat((x, attention)))
+        # classify
+        if label is not None:
+            y = self.decode_one(tree)
+            loss, pred, dist = self.calc_loss(y, label)
+            tree.data['correct'] = label
+            tree.data['dist'] = dist
+            tree.data['correct_pred'] = 'T:{},Y:{}'.format(label, pred)
+            tree.data['is_correct'] = pred == label
+            return loss, tree.data['is_correct']
+        return None, None
+
+    def calc_loss(self, y, t):
+        if self.__is_regression:
+            correct = chainer.Variable(numpy.array([[t]], dtype=numpy.float32))
+            loss = F.mean_squared_error(y, correct)
+            dist = y.data
+            pred = 1 if float(y.data) >= 0.5 else 0
         else:
-            if regression:
-                y = F.sigmoid(self.out_reg(x))
+            correct = utils.num2onehot(t)
+            loss = F.softmax_cross_entropy(y, correct)
+            dist = F.softmax(y).data
+            pred = numpy.argmax(dist)
+        return loss, pred, dist
+
+    def decode_one(self, tree):
+        in_vec = tree.data['vector']
+        if self.__attention_method is not None:
+            attention_vec = self.calc_attention(tree)
+            if self.__is_regression:
+                y = F.sigmoid(self.atout_reg(F.concat((in_vec, attention_vec))))
             else:
-                y = self.out_class(x)
+                y = self.atout_class(F.concat((in_vec, attention_vec)))
+        else:
+            if self.__is_regression:
+                y = F.sigmoid(self.out_reg(in_vec))
+            else:
+                y = self.out_class(in_vec)
         return y
 
-    def calc_attention(self, x, attention_mems, tree):
-        if attention_mems is None:
-            return
+    def calc_attention(self, tree):
         sume = chainer.Variable(numpy.array([[0]], dtype=numpy.float32))
-        e_list = list()
-        for phmem in attention_mems:
-            if self.__method == 'only':
-                tmp = F.tanh(self.atw1(phmem))
+        root_vec = tree.data['vector']
+        for subtree in tree.subtrees():
+            phrase_vec = subtree.data['vector']
+            if self.__attention_method == 'only':
+                tmp = F.tanh(self.atw1(phrase_vec))
                 e = F.exp(self.atw2(tmp))
-            elif self.__method == 'concat':
-                tmp = F.tanh(self.atw1con(F.concat((phmem, x))))
+            elif self.__attention_method == 'concat':
+                tmp = F.tanh(self.atw1con(F.concat((phrase_vec, root_vec))))
                 e = F.exp(self.atw2(tmp))
-            elif self.__method == 'bilinear':
-                e = F.exp(F.tanh(self.atw1bi(phmem, x)))
-            elif self.__method == 'dot':
-                e = F.exp(F.tanh(F.matmul(phmem, x, transb=True)))
-            elif self.__method == 'gate':
-                gate = F.sigmoid(self.atw1gate(F.concat((phmem, x))))
-                tmp = F.tanh(self.atw1con(F.concat((phmem, x))))
+            elif self.__attention_method == 'bilinear':
+                e = F.exp(F.tanh(self.atw1bi(phrase_vec, root_vec)))
+            elif self.__attention_method == 'dot':
+                e = F.exp(F.tanh(F.matmul(phrase_vec, root_vec, transb=True)))
+            elif self.__attention_method == 'gate':
+                gate = F.sigmoid(self.atw1gate(F.concat((phrase_vec, root_vec))))
+                tmp = F.tanh(self.atw1con(F.concat((phrase_vec, root_vec))))
                 e = F.exp(self.atw2(tmp * gate))
             else:
                 assert False, 'illegal attention method name'
-            e_list.append(e)
+            subtree.data['attention_weight'] = e
             sume += e
-        attention = chainer.Variable(numpy.zeros(x.data.shape, dtype=numpy.float32))
-        for phmem, e in zip(attention_mems, e_list):
-            a = e / sume
-            if tree is not None:
-                for subt in tree.subtrees():
-                    if tuple(phmem.data.flatten().tolist()) in subt.data:
-                        subt.data['render_label'].append('({:0>.3})'.format(float(a.data)))
-            attention += F.matmul(a, phmem)
-        return attention
+        attention_vec = chainer.Variable(numpy.zeros(root_vec.data.shape, dtype=numpy.float32))
+
+        top5 = list()
+        for subtree in tree.subtrees():
+            attention_weight = subtree.data['attention_weight'] / sume
+            subtree.data['attention_weight'] = attention_weight
+            attention_vec += F.matmul(attention_weight, subtree.data['vector'])
+
+            # create top5 attentted list
+            if len(top5) < 5:
+                top5.append(subtree)
+            elif min(float(t.data['attention_weight'].data) for t in top5) < float(attention_weight.data):
+                minf = min(float(t.data['attention_weight'].data) for t in top5)
+                flist = [float(t.data['attention_weight'].data) for t in top5]
+                i = flist.index(minf)
+                top5.pop(i)
+                top5.append(subtree)
+        for i, tree in enumerate(sorted(top5, key=lambda t: -float(t.data['attention_weight'].data))):
+            tree.data['top{}'.format(i + 1)] = True
+
+        return attention_vec
 
     def init_count(self):
         self.__count = {'total_root': 0, 'correct_root': 0}
@@ -103,3 +143,6 @@ class AttentionClassifier(chainer.Chain):
         else:
             root_acc = self.__count['correct_root'] / self.__count['total_root']
         return root_acc
+
+    def get_count(self):
+        return self.__count['total_root'], self.__count['correct_root']
