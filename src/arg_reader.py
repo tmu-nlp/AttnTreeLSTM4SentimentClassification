@@ -3,13 +3,13 @@ import utils
 import pickle
 import os
 from chainer import optimizers
-
+from networks import Composition
 
 @decoparser.option('--kind', required=True, choices=('constituency', 'dependency'))
 @decoparser.option('--lang', required=True, choices=('Ja', 'En'))
 @decoparser.option('--logdir', required=True)
 @decoparser.option('--optimizer', choices=('SGD', 'AdaDelta', 'AdaGrad', 'Adam', 'NesterovAG'), default='Adam')
-@decoparser.option('--composition', choices=('SLSTM', 'TreeLSTM'), default='SLSTM')
+@decoparser.option('--composition', type=decoparser.Enum, choices=Composition, default=Composition.tree_lstm)
 @decoparser.option('--lr', type=float, default=0.01)
 @decoparser.option('--l2', type=float, default=0.0001)
 @decoparser.option('--clip-grad', type=float, default=5)
@@ -101,7 +101,7 @@ class ArgReader:
             print('toy data: {}'.format(self.__is_toy), file=f)
             print('mem_units: {}'.format(self.__mem_units), file=f)
             print('optimizer: {}'.format(self.__opt_name), file=f)
-            print('compositoin network: {}'.format(self.__composition), file=f)
+            print('compositoin network: {}'.format(self.__composition.name), file=f)
             print('learning rate: {}'.format(self.__lr), file=f)
             print('l2: {}'.format(self.__l2), file=f)
             print('clip grad: {}'.format(self.__clip_grad), file=f)
@@ -219,6 +219,7 @@ class ArgReader:
         d = get_arg('all')
         d['test'] = test
         d['dev'] = dev
+        d['composition'] = d['composition'].name
         pickle.dump(d, open(resultf, 'wb'))
 
     def use_embed(self):

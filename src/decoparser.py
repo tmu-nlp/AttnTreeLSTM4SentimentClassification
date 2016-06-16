@@ -2,6 +2,7 @@ import os
 import sys
 import argparse
 from argparse import ArgumentTypeError
+from enum import Enum as origEnum
 
 
 class FileType:
@@ -30,6 +31,10 @@ class FilePath:
 
     def __repr__(self):
         return 'hoge'
+
+
+class Enum:
+    pass
 
 
 class Cmd:
@@ -82,6 +87,16 @@ class Cmd:
             slf = eval('self.{}'.format(kw))
             if slf is not None:
                 kwargs.update({kw: slf})
+        if self.type is Enum:
+            if not issubclass(self.choices, origEnum):
+                assert False, 'if type is decoparser.Enum, choices should be enum.Enum type'
+            del kwargs['type']
+            kwargs['choices'] = list(self.choices.__members__)
+            if self.default is not None:
+                if not isinstance(self.default, self.choices):
+                    assert False, 'default value should be a value of Enum'
+                kwargs['default'] = self.default.name
+
         Cmd.pre_options.append((args, kwargs))
 
     def add_argument(self):
@@ -100,14 +115,16 @@ class Cmd:
         Cmd.get_args()
         kname = self.name[2:] if self.name.startswith('--') else self.name
         kname = kname.replace('-', '_')
-        opname = Cmd.args.__dict__[kname]
+        arg = Cmd.args.__dict__[kname]
+        if self.type is Enum:
+            arg = self.choices[arg]
         # file type
-        if isinstance(opname, FileType):
-            with open(opname.name, opname.mode, encoding=opname.encoding) as f:
+        if isinstance(arg, FileType):
+            with open(arg.name, arg.mode, encoding=arg.encoding) as f:
                 kwargs[kname] = f
                 return self.f(*args, **kwargs)
         else:
-            kwargs[kname] = opname
+            kwargs[kname] = arg
             return self.f(*args, **kwargs)
 
 

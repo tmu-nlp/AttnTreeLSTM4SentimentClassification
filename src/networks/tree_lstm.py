@@ -4,11 +4,22 @@ import chainer.links as L
 from chainer.variable import Variable
 import numpy as np
 import utils
+from enum import Enum
+
+
+class Composition(Enum):
+    tree_lstm = 1
+    slstm = 2
+
+    def forget_in_size(self):
+        return [2, 4][self.value - 1]
 
 
 class TreeLSTM(chainer.Chain):
-    def __init__(self, vocab, n_units, mem_units, is_regression=False, train=True, is_leaf_as_chunk=False):
+
+    def __init__(self, vocab, n_units, mem_units, comp_type=Composition.tree_lstm, is_regression=False, train=True, is_leaf_as_chunk=False):
         n_vocab = vocab.get_vocab_size()
+
         super().__init__(
             embed=L.EmbedID(n_vocab, n_units),
             embed2hidden=L.Linear(n_units, mem_units),
@@ -16,8 +27,8 @@ class TreeLSTM(chainer.Chain):
             updater=L.Linear(mem_units * 4, mem_units),
             inputl=L.Linear(mem_units * 4, mem_units),
             inputr=L.Linear(mem_units * 4, mem_units),
-            forgetl=L.Linear(mem_units * 2, mem_units),
-            forgetr=L.Linear(mem_units * 2, mem_units),
+            forgetl=L.Linear(mem_units * comp_type.forget_in_size(), mem_units),
+            forgetr=L.Linear(mem_units * comp_type.forget_in_size(), mem_units),
             outputl=L.Linear(mem_units * 4, mem_units),
             outputr=L.Linear(mem_units * 4, mem_units)
         )
@@ -26,6 +37,7 @@ class TreeLSTM(chainer.Chain):
         self.is_leaf_as_chunk = is_leaf_as_chunk
         self.mem_units = mem_units
         self.is_regression = is_regression
+        self.comp_type = comp_type
 
         # init embed
         if self.__vocab.embed_model is not None:
@@ -65,14 +77,18 @@ class TreeLSTM(chainer.Chain):
             right_vec, rightc, right_loss = self(right_tree, attention_mems, classifier, visualize)
 
             concat = F.concat((left_vec, right_vec, leftc, rightc))
-            concatl = F.concat((left_vec, leftc))
-            concatr = F.concat((right_vec, rightc))
             u_l = self.updatel(concat)
             u_r = self.updater(concat)
             i_l = self.inputl(concat)
             i_r = self.inputr(concat)
-            f_l = self.forgetl(concatr)
-            f_r = self.forgetr(concatl)
+            if self.comp_type == Composition.tree_lstm:
+                concatl = F.concat((left_vec, leftc))
+                concatr = F.concat((right_vec, rightc))
+                f_l = self.forgetl(concatr)
+                f_r = self.forgetr(concatl)
+            elif self.comp_type == Composition.slstm:
+                f_l = self.forgetl(concat)
+                f_r = self.forgetr(concat)
             o_l = self.outputl(concat)
             o_r = self.outputr(concat)
             l_v = F.concat((u_l, i_l, f_l, o_l))
