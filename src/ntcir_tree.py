@@ -10,7 +10,6 @@ import multiprocessing as mp
 from tree import Tree
 from attention_classifier import AttentionClassifier
 from vocablary import Vocablary
-from networks import SLSTM
 from networks import TreeLSTM
 import chainer
 
@@ -83,11 +82,7 @@ def one_fold(t, i, results, logs):
         vocab.read_embed(embedf)
     print('vocab init fin', file=flog, flush=True)
 
-
-    if composition == 'SLSTM':
-        rnn = SLSTM(vocab, n_units, mem_units, is_regression, is_leaf_as_chunk=mode == 'dependency')
-    elif composition == 'TreeLSTM':
-        rnn = TreeLSTM(vocab, n_units, mem_units, is_regression, is_leaf_as_chunk=mode == 'dependency')
+    rnn = TreeLSTM(vocab, n_units, mem_units, composition, is_regression, is_leaf_as_chunk=mode == 'dependency')
 
     optimizer = opt()
     optimizer.setup(rnn)
