@@ -89,7 +89,7 @@ def one_fold(t, i, results, logs):
     optimizer.add_hook(chainer.optimizer.WeightDecay(l2))
     optimizer.add_hook(chainer.optimizer.GradientClipping(clip_grad))
 
-    classifier = AttentionClassifier(mem_units, label_num, attention_method)
+    classifier = AttentionClassifier(mem_units, label_num, attention_method, attention_target, dropout, is_regression)
     optimizer2 = opt()
     optimizer2.setup(classifier)
     optimizer2.add_hook(chainer.optimizer.WeightDecay(l2))
@@ -142,7 +142,7 @@ def one_fold(t, i, results, logs):
             # compute and assign vector to each node of tree
             rnn(tree)
             # classify polarity for each node who has correct label
-            loss = classifier(tree)
+            loss = classifier(tree, is_train=False)
         root_acc = classifier.calc_acc()
         logs.put('{}dev ep{}: acc={:0>2}'.format(i, epoch, root_acc))
         if best_root < root_acc:
@@ -164,7 +164,7 @@ def one_fold(t, i, results, logs):
         # compute and assign vector to each node of tree
         rnn(tree)
         # classify polarity for each node who has correct label
-        loss = best_classifier(tree)
+        loss = best_classifier(tree, is_train=False)
 
         # logging
         if render_flag:
@@ -199,7 +199,7 @@ def one_fold(t, i, results, logs):
                 if 'correct_pred' in tree.data:
                     return '3'
                 return '1'
-            tree.render_graph(graph_dirs[i], 'test{}'.format(testi), get_label, get_fill_color, get_color, get_peripheries)
+            tree.render_graph(graph_dirs[i], 'test{}{}'.format(testi, tree.data['is_correct']), get_label, get_fill_color, get_color, get_peripheries)
         print('{}, {}, dist:{}, {}'.format(tree.data['is_correct'], tree.data['correct_pred'], tree.data['dist'], line[:-1]), file=fw)
     fw.close()
     acc = best_classifier.calc_acc()
@@ -217,6 +217,7 @@ data = args.get_data()
 logf, progf, model_dir, ex_dir, fold_dir, graph_dirs = args.get_logfiles()
 is_regression = args.is_regression()
 attention_method = args.get_attention()
+attention_target = args.get_attention_target()
 n_units = args.get_n_units()
 mem_units = args.get_mem_units()
 batch_size = args.get_batch_size()
@@ -225,6 +226,7 @@ label_num = args.get_label_num()
 learning_rate = args.get_lr()
 l2 = args.get_l2()
 clip_grad = args.get_clip_grad()
+dropout = args.get_dropout()
 opt = args.get_optimizer()
 composition = args.get_composition()
 is_toy = args.is_toy()

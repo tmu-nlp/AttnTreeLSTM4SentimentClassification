@@ -13,15 +13,17 @@ from networks import Composition
 @decoparser.option('--lr', type=float, default=0.01)
 @decoparser.option('--l2', type=float, default=0.0001)
 @decoparser.option('--clip-grad', type=float, default=5)
+@decoparser.option('--dropout', type=float, default=0.5)
 @decoparser.option('--mem-units', type=int, default=100)
 @decoparser.option('--attention', choices=('only', 'concat', 'bilinear', 'dot', 'gate'))
+@decoparser.option('--attention-target', choices=('all', 'word', 'phrase'), default='all')
 @decoparser.option('--regression', action='store_true')
 @decoparser.option('--toy', action='store_true')
 @decoparser.option('--pol-dict', choices=('pn', 'pnn'))
 @decoparser.option('--not-render', action='store_false', default=True)
 @decoparser.option('--not-embed', action='store_true')
-def get_arg(arg, kind, logdir, optimizer, lr, l2, clip_grad, mem_units, attention, toy, pol_dict, regression, composition, lang, not_render, not_embed):
-    args = ['kind', 'logdir', 'lr', 'l2', 'clip_grad', 'attention', 'toy', 'pol_dict', 'optimizer', 'mem_units', 'regression', 'composition', 'lang', 'not_render', 'not_embed']
+def get_arg(arg, kind, logdir, optimizer, lr, l2, clip_grad, mem_units, attention, toy, pol_dict, regression, composition, lang, not_render, not_embed, attention_target, dropout):
+    args = ['kind', 'logdir', 'lr', 'l2', 'clip_grad', 'attention', 'toy', 'pol_dict', 'optimizer', 'mem_units', 'regression', 'composition', 'lang', 'not_render', 'not_embed', 'attention_target', 'dropout']
     d = dict()
     for a in args:
         d[a] = eval(a)
@@ -53,9 +55,11 @@ class ArgReader:
         self.__composition = get_arg('composition')
         self.__n_units = 200
         self.__render_graph = get_arg('not_render')
+        self.__dropout = get_arg('dropout')
         if self.__lang == 'En':
             self.__n_units = 300
         self.__not_embed = get_arg('not_embed')
+        self.__attention_target = get_arg('attention_target')
 
         # optimizer
         self.__opt_name = get_arg('optimizer')
@@ -105,7 +109,9 @@ class ArgReader:
             print('learning rate: {}'.format(self.__lr), file=f)
             print('l2: {}'.format(self.__l2), file=f)
             print('clip grad: {}'.format(self.__clip_grad), file=f)
+            print('dropout ratio: {}'.format(self.__dropout), file=f)
             print('attention: {}'.format(self.__attention), file=f)
+            print('attention target: {}'.format(self.__attention_target), file=f)
             print('regression: {}'.format(self.__is_regression), file=f)
             print('batch size: {}'.format(self.__batch_size), file=f)
             print('pol dict: {}'.format(self.__dict), file=f)
@@ -207,6 +213,12 @@ class ArgReader:
 
     def get_composition(self):
         return self.__composition
+
+    def get_attention_target(self):
+        return self.__attention_target
+
+    def get_dropout(self):
+        return self.__dropout
 
     def is_toy(self):
         return self.__is_toy

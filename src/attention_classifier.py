@@ -6,7 +6,7 @@ import utils
 
 
 class AttentionClassifier(chainer.Chain):
-    def __init__(self, mem_units, label_num, attention_method, is_regression=False):
+    def __init__(self, mem_units, label_num, attention_method, attention_target, dropout_ratio, is_regression=False):
         super().__init__(
             atw1=L.Linear(mem_units, mem_units),
             atw1con=L.Linear(2 * mem_units, mem_units),
@@ -19,24 +19,26 @@ class AttentionClassifier(chainer.Chain):
             out_reg=L.Linear(mem_units, 1))
         self.__count = {'total_root': 0, 'correct_root': 0}
         self.__attention_method = attention_method
+        self.__attention_target = attention_target
         self.__is_regression = is_regression
+        self.__dropout_ratio = dropout_ratio
 
-    def __call__(self, tree):
+    def __call__(self, tree, is_train=True):
         total_loss = 0
         for subtree in tree.subtrees():
-            loss, is_correct = self.classify_one(subtree)
+            loss, is_correct = self.classify_one(subtree, is_train)
             if loss is not None:
                 total_loss += loss
 
         # to log the attention weights for root node, root node should be classified lastly
-        loss, is_correct = self.classify_one(tree)
+        loss, is_correct = self.classify_one(tree, is_train)
         total_loss += loss
         self.__count['total_root'] += 1
         if is_correct:
             self.__count['correct_root'] += 1
         return total_loss
 
-    def classify_one(self, tree):
+    def classify_one(self, tree, is_train):
         label = None
         # get label
         if 'label' in tree.get_label():
@@ -52,7 +54,7 @@ class AttentionClassifier(chainer.Chain):
 
         # classify
         if label is not None:
-            y = self.decode_one(tree)
+            y = self.decode_one(tree, is_train)
             loss, pred, dist = self.calc_loss(y, label)
             tree.data['correct'] = label
             tree.data['dist'] = dist
@@ -74,19 +76,19 @@ class AttentionClassifier(chainer.Chain):
             pred = numpy.argmax(dist)
         return loss, pred, dist
 
-    def decode_one(self, tree):
+    def decode_one(self, tree, is_train=True):
         in_vec = tree.data['vector']
         if self.__attention_method is not None:
             attention_vec = self.calc_attention(tree)
             if self.__is_regression:
-                y = F.sigmoid(self.atout_reg(F.concat((in_vec, attention_vec))))
+                y = F.sigmoid(self.atout_reg(F.dropout(F.concat((in_vec, attention_vec)), ratio=self.__dropout_ratio, train=is_train)))
             else:
-                y = self.atout_class(F.concat((in_vec, attention_vec)))
+                y = self.atout_class(F.dropout(F.concat((in_vec, attention_vec)), ratio=self.__dropout_ratio, train=is_train))
         else:
             if self.__is_regression:
-                y = F.sigmoid(self.out_reg(in_vec))
+                y = F.sigmoid(self.out_reg(F.dropout(in_vec, ratio=self.__dropout_ratio, train=is_train)))
             else:
-                y = self.out_class(in_vec)
+                y = self.out_class(F.dropout(in_vec, ratio=self.__dropout_ratio, train=is_train))
         return y
 
     def calc_attention(self, tree):
@@ -94,7 +96,13 @@ class AttentionClassifier(chainer.Chain):
         root_vec = tree.data['vector']
         for subtree in tree.subtrees():
             phrase_vec = subtree.data['vector']
-            if self.__attention_method == 'only':
+            if self.__attention_target == 'word' and not subtree.is_leaf():
+                subtree.data['attention_weight'] = chainer.Variable(numpy.array([[0]], dtype=numpy.float32))
+                continue
+            elif self.__attention_target == 'phrase' and subtree.is_leaf():
+                subtree.data['attention_weight'] = chainer.Variable(numpy.array([[0]], dtype=numpy.float32))
+                continue
+            elif self.__attention_method == 'only':
                 tmp = F.tanh(self.atw1(phrase_vec))
                 e = F.exp(self.atw2(tmp))
             elif self.__attention_method == 'concat':
@@ -116,21 +124,24 @@ class AttentionClassifier(chainer.Chain):
 
         top5 = list()
         for subtree in tree.subtrees():
-            attention_weight = subtree.data['attention_weight'] / sume
-            subtree.data['attention_weight'] = attention_weight
-            attention_vec += F.matmul(attention_weight, subtree.data['vector'])
+            if float(subtree.data['attention_weight'].data) != 0:
+                attention_weight = subtree.data['attention_weight'] / sume
+                subtree.data['attention_weight'] = attention_weight
+                attention_vec += F.matmul(attention_weight, subtree.data['vector'])
 
-            # create top5 attentted list
-            if len(top5) < 5:
-                top5.append(subtree)
-            elif min(float(t.data['attention_weight'].data) for t in top5) < float(attention_weight.data):
-                minf = min(float(t.data['attention_weight'].data) for t in top5)
-                flist = [float(t.data['attention_weight'].data) for t in top5]
-                i = flist.index(minf)
-                top5.pop(i)
-                top5.append(subtree)
-        for i, tree in enumerate(sorted(top5, key=lambda t: -float(t.data['attention_weight'].data))):
-            tree.data['top{}'.format(i + 1)] = True
+                # create top5 attentted list
+                if tree.is_root():
+                    if len(top5) < 5:
+                        top5.append(subtree)
+                    elif min(float(t.data['attention_weight'].data) for t in top5) < float(attention_weight.data):
+                        minf = min(float(t.data['attention_weight'].data) for t in top5)
+                        flist = [float(t.data['attention_weight'].data) for t in top5]
+                        i = flist.index(minf)
+                        top5.pop(i)
+                        top5.append(subtree)
+        if tree.is_root():
+            for i, tree in enumerate(sorted(top5, key=lambda t: -float(t.data['attention_weight'].data))):
+                tree.data['top{}'.format(i + 1)] = True
 
         return attention_vec
 
