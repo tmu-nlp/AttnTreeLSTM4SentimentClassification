@@ -92,6 +92,7 @@ class ArgReader:
         data = utils.read_pkl_bz2(data)
         if self.__is_toy:
             data = data['toy']
+            self.__n_epoch = 3
         if self.__dict == 'pn':
             data = data['poldict']
         elif self.__dict == 'pnn':
