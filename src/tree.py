@@ -37,6 +37,7 @@ class Tree:
         # make graph
         label = get_label(self)
         g.node(str(id(self)), label, fontsize='20', style='filled', fillcolor=get_fill_color(self), color=get_color(self), peripheries=get_peripheries(self))
+        g.node('sent', ' '.join(self.get_leaves()), fontsize='20')
         recursive(self, g)
         g.render(cleanup=True)
 
