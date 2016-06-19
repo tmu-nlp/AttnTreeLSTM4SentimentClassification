@@ -31,10 +31,15 @@ def get_data_path():
 
 def read_pkl_bz2(fname):
     with open(fname, 'rb') as f:
-        data = f.read()
-    compressed = bz2.decompress(data)
-    return pickle.loads(compressed)
+        compressed = f.read()
+    pklstr = bz2.decompress(compressed)
+    return pickle.loads(pklstr)
 
+def write_pkl_bz2(obj, fname):
+    with open(fname, 'wb') as f:
+        pklstr = pickle.dumps(obj)
+        compressed = bz2.compress(pklstr)
+        f.write(compressed)
 
 def get_line_num(path):
     num = sum(1 for _ in open(path))
