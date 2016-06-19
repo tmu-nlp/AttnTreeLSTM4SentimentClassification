@@ -16,7 +16,7 @@ class Tree:
         else:
             self.__nltree = nltree
             self.__root = root
-            self.__parent = parent
+            self.parent = parent
             if not self.is_leaf():
                 for i in range(len(self.__nltree)):
                     self.children.append(Tree(root=self.__root, parent=self, nltree=self.__nltree[i]))
