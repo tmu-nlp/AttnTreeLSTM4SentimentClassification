@@ -26,6 +26,9 @@ class AttentionClassifier(chainer.Chain):
     def __call__(self, tree, is_train=True):
         total_loss = 0
         for subtree in tree.subtrees():
+            # skip the node whose child is only one
+            if 'vector' not in subtree.data:
+                continue
             loss, is_correct = self.classify_one(subtree, is_train)
             if loss is not None:
                 total_loss += loss
@@ -95,6 +98,9 @@ class AttentionClassifier(chainer.Chain):
         sume = chainer.Variable(numpy.array([[0]], dtype=numpy.float32))
         root_vec = tree.data['vector']
         for subtree in tree.subtrees():
+            # skip the node whose child is only one
+            if 'vector' not in subtree.data:
+                continue
             phrase_vec = subtree.data['vector']
             if self.__attention_target == 'word' and not subtree.is_leaf():
                 subtree.data['attention_weight'] = chainer.Variable(numpy.array([[0]], dtype=numpy.float32))
@@ -124,6 +130,9 @@ class AttentionClassifier(chainer.Chain):
 
         top5 = list()
         for subtree in tree.subtrees():
+            # skip the node whose child is only one
+            if 'vector' not in subtree.data:
+                continue
             if float(subtree.data['attention_weight'].data) != 0:
                 attention_weight = subtree.data['attention_weight'] / sume
                 subtree.data['attention_weight'] = attention_weight

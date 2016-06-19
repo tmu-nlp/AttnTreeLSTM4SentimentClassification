@@ -49,7 +49,6 @@ class TreeLSTM(chainer.Chain):
         # skip the node if whose child is only one
         while len(tree.children) == 1 and not tree.is_leaf():
             tree = tree.children[0]
-
         if tree.is_leaf():
             word = tree.get_word()
             # avg
@@ -74,6 +73,11 @@ class TreeLSTM(chainer.Chain):
             left_tree, right_tree = tree.children
             leftc = self(left_tree)
             rightc = self(right_tree)
+            # skip the node if whose child is only one
+            while len(left_tree.children) == 1 and not left_tree.is_leaf():
+                left_tree = left_tree.children[0]
+            while len(right_tree.children) == 1 and not right_tree.is_leaf():
+                right_tree = right_tree.children[0]
             left_vec = left_tree.data['vector']
             right_vec = right_tree.data['vector']
 
