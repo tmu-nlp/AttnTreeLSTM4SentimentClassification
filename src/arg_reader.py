@@ -13,7 +13,7 @@ from networks import Composition
 @decoparser.option('--lr', type=float, default=0.01)
 @decoparser.option('--l2', type=float, default=0.0001)
 @decoparser.option('--clip-grad', type=float, default=5)
-@decoparser.option('--dropout', type=float, default=0.5)
+@decoparser.option('--dropout', type=float, default=0.0)
 @decoparser.option('--mem-units', type=int, default=100)
 @decoparser.option('--attention', choices=('only', 'concat', 'bilinear', 'dot', 'gate'))
 @decoparser.option('--attention-target', choices=('all', 'word', 'phrase'), default='all')
