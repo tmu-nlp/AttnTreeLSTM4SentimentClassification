@@ -11,6 +11,7 @@ from tree import Tree
 from attention_classifier import AttentionClassifier
 from vocablary import Vocablary
 from networks import TreeLSTM
+from networks import TreeAttentionLSTM
 import chainer
 
 
@@ -76,20 +77,27 @@ def one_fold(t, i, results, logs):
 
     print('reading vocablary', file=flog, flush=True)
     vocab = Vocablary()
-    vocab.read_vocabl(data['vocab'])
+    vocab.read_vocab(data['vocab'])
     if not is_toy and use_embed:
         print('reading initial embedding', file=flog, flush=True)
         vocab.read_embed(embedf)
     print('vocab init fin', file=flog, flush=True)
 
-    rnn = TreeLSTM(vocab, n_units, mem_units, composition, is_regression, is_leaf_as_chunk=mode == 'dependency')
+    if is_always_attn:
+        rnn = TreeAttentionLSTM(vocab, n_units, mem_units, attention_method, is_regression, forget_bias, is_leaf_as_chunk=mode == 'dependency')
+    else:
+        rnn = TreeLSTM(vocab, n_units, mem_units, composition, is_regression, forget_bias, is_leaf_as_chunk=mode == 'dependency')
 
     optimizer = opt()
     optimizer.setup(rnn)
     optimizer.add_hook(chainer.optimizer.WeightDecay(l2))
     optimizer.add_hook(chainer.optimizer.GradientClipping(clip_grad))
+    if is_always_attn:
+        attn_method = None
+    else:
+        attn_method = attention_method
 
-    classifier = AttentionClassifier(mem_units, label_num, attention_method, attention_target, dropout, is_regression)
+    classifier = AttentionClassifier(mem_units, label_num, attn_method, attention_target, dropout, is_regression, is_only_attn)
     optimizer2 = opt()
     optimizer2.setup(classifier)
     optimizer2.add_hook(chainer.optimizer.WeightDecay(l2))
@@ -176,6 +184,10 @@ def one_fold(t, i, results, logs):
                     label.append('{:.5f}'.format(float(tree.data['attention_weight'].data)))
                 if tree.is_leaf():
                     label.append(tree.get_word())
+                if 'dist' in tree.data:
+                    n = tree.data['dist'][0][0]
+                    p = tree.data['dist'][0][1]
+                    label.append('P:{:.3f},N:{:.3f}'.format(p, n))
                 return '\n'.join(label)
             def get_fill_color(tree):
                 if 'top1' in tree.data:
@@ -232,7 +244,9 @@ composition = args.get_composition()
 is_toy = args.is_toy()
 render_flag = args.render_grpah()
 use_embed = args.use_embed()
-
+forget_bias = args.forget_bias()
+is_only_attn = args.is_only_attn()
+is_always_attn = args.is_always_attn()
 
 results = mp.Manager().dict()
 logs = mp.Queue()

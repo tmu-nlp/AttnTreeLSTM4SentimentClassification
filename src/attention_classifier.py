@@ -6,7 +6,7 @@ import utils
 
 
 class AttentionClassifier(chainer.Chain):
-    def __init__(self, mem_units, label_num, attention_method, attention_target, dropout_ratio, is_regression=False):
+    def __init__(self, mem_units, label_num, attention_method, attention_target, dropout_ratio, is_regression=False, only_attn=False):
         super().__init__(
             atw1=L.Linear(mem_units, mem_units),
             atw1con=L.Linear(2 * mem_units, mem_units),
@@ -22,26 +22,28 @@ class AttentionClassifier(chainer.Chain):
         self.__attention_target = attention_target
         self.__is_regression = is_regression
         self.__dropout_ratio = dropout_ratio
+        self.__only_attn = only_attn
 
-    def __call__(self, tree, is_train=True):
+    def __call__(self, tree, is_train=True, predict_all=False):
         total_loss = 0
         for subtree in tree.subtrees():
             # skip the node whose child is only one
             if 'vector' not in subtree.data:
                 continue
-            loss, is_correct = self.classify_one(subtree, is_train)
+            loss, is_correct = self.classify_one(subtree, is_train, predict_all)
             if loss is not None:
                 total_loss += loss
 
         # to log the attention weights for root node, root node should be classified lastly
-        loss, is_correct = self.classify_one(tree, is_train)
-        total_loss += loss
+        loss, is_correct = self.classify_one(tree, is_train, predict_all)
+        if loss is not None:
+            total_loss += loss
         self.__count['total_root'] += 1
         if is_correct:
             self.__count['correct_root'] += 1
         return total_loss
 
-    def classify_one(self, tree, is_train):
+    def classify_one(self, tree, is_train, predict_all):
         label = None
         # get label
         if 'label' in tree.get_label():
@@ -49,22 +51,37 @@ class AttentionClassifier(chainer.Chain):
             if self.__is_regression:
                 typ = float
             label = typ(tree.get_label().split('label:')[1].split(',')[0])
-        elif tree.get_label().isdigit():
-            typ = int
-            if self.__is_regression:
-                typ = float
-            label = typ(tree.get_label())
+        #elif tree.get_label().isdigit():
+        #    typ = int
+        #    if self.__is_regression:
+        #        typ = float
+        #    label = typ(tree.get_label())
 
         # classify
         if label is not None:
             y = self.decode_one(tree, is_train)
             loss, pred, dist = self.calc_loss(y, label)
+            tree.data['pred'] = pred
             tree.data['correct'] = label
             tree.data['dist'] = dist
             tree.data['correct_pred'] = 'T:{},Y:{}'.format(label, pred)
             tree.data['is_correct'] = pred == label
             return loss, tree.data['is_correct']
+
+        if predict_all:
+            self.predict_one(tree)
         return None, None
+
+    def predict_one(self, tree):
+        y = self.decode_one(tree, is_train=False)
+        if self.__is_regression:
+            dist = y.data
+            pred = 1 if float(y.data) >= 0.5 else 0
+        else:
+            dist = F.softmax(y).data
+            pred = numpy.argmax(dist)
+        tree.data['dist'] = dist
+        tree.data['pred'] = pred
 
     def calc_loss(self, y, t):
         if self.__is_regression:
@@ -80,18 +97,27 @@ class AttentionClassifier(chainer.Chain):
         return loss, pred, dist
 
     def decode_one(self, tree, is_train=True):
+        #if self.__dropout_ratio == 0.0:
+        #    is_train = False
         in_vec = tree.data['vector']
         if self.__attention_method is not None:
             attention_vec = self.calc_attention(tree)
             if self.__is_regression:
-                y = F.sigmoid(self.atout_reg(F.dropout(F.concat((in_vec, attention_vec)), ratio=self.__dropout_ratio, train=is_train)))
+#                y = F.sigmoid(self.atout_reg(F.dropout(F.concat((in_vec, attention_vec)), ratio=self.__dropout_ratio, train=is_train)))
+                y = F.sigmoid(self.atout_reg(F.concat((in_vec, attention_vec))))
             else:
-                y = self.atout_class(F.dropout(F.concat((in_vec, attention_vec)), ratio=self.__dropout_ratio, train=is_train))
+#                y = self.atout_class(F.dropout(F.concat((in_vec, attention_vec)), ratio=self.__dropout_ratio, train=is_train))
+                if self.__only_attn:
+                    y = self.out_class(attention_vec)
+                else:
+                    y = self.atout_class(F.concat((in_vec, attention_vec)))
         else:
             if self.__is_regression:
-                y = F.sigmoid(self.out_reg(F.dropout(in_vec, ratio=self.__dropout_ratio, train=is_train)))
+#                y = F.sigmoid(self.out_reg(F.dropout(in_vec, ratio=self.__dropout_ratio, train=is_train)))
+                y = F.sigmoid(self.out_reg(in_vec))
             else:
-                y = self.out_class(F.dropout(in_vec, ratio=self.__dropout_ratio, train=is_train))
+#                y = self.out_class(F.dropout(in_vec, ratio=self.__dropout_ratio, train=is_train))
+                y = self.out_class(in_vec)
         return y
 
     def calc_attention(self, tree):

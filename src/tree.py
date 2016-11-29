@@ -1,3 +1,4 @@
+import chainer
 from nltk.tree import Tree as nlTree
 from graphviz import Digraph
 
@@ -21,10 +22,11 @@ class Tree:
                 for i in range(len(self.__nltree)):
                     self.children.append(Tree(root=self.__root, parent=self, nltree=self.__nltree[i]))
 
-    def render_graph(self, fdir, fname, get_label=lambda tree: tree.get_label(), get_fill_color=lambda tree: '#ffffff', get_color=lambda tree: '#000000', get_peripheries=lambda tree: '1'):
+    def render_graph(self, fdir, fname, get_label=lambda tree: tree.get_label(), get_fill_color=lambda tree: '#ffffff', get_color=lambda tree: '#000000', get_peripheries=lambda tree: '1', clean=True):
         def recursive(t, g):
             for c in t.children:
                 label = get_label(c)
+                label = label.replace('\\', '##backslash##')
                 g.node(str(id(c)), label, fontsize='20', style='filled', fillcolor=get_fill_color(c), color=get_color(c), peripheries=get_peripheries(c))
                 g.edge(str(id(t)), str(id(c)), dir='back')
                 recursive(c, g)
@@ -37,9 +39,28 @@ class Tree:
         # make graph
         label = get_label(self)
         g.node(str(id(self)), label, fontsize='20', style='filled', fillcolor=get_fill_color(self), color=get_color(self), peripheries=get_peripheries(self))
-        g.node('sent', ' '.join(self.get_leaves()), fontsize='20')
+        g.node('sent', ' '.join(self.get_leaves()).replace('\\', '\\\\'), fontsize='20')
         recursive(self, g)
-        g.render(cleanup=True)
+        g.render(cleanup=clean)
+
+    def get_dict_for_demo(self):
+        def get_dict_one(tree):
+            d = dict()
+            d['name'] = ' '.join(tree.get_leaves())
+            d['p'] = '{:.5f}'.format(tree.data['dist'][0][1])
+            d['n'] = '{:.5f}'.format(tree.data['dist'][0][0])
+            if 'attention_weight' in tree.data:
+                d['w'] = '{:.5f}'.format(float(tree.data['attention_weight'].data))
+            return d
+
+        d = get_dict_one(self)
+        for c in self.children:
+            if 'children' not in d:
+                d['children'] = list()
+            cd = c.get_dict_for_demo()
+            d['children'].append(cd)
+        return d
+
 
     def s_fomula(self):
         return ' '.join(tmp for tmp in ' '.join(
@@ -53,6 +74,9 @@ class Tree:
 
     def get_label(self):
         return self.__nltree.label()
+
+    def set_label(self, label):
+        self.__nltree.set_label(label)
 
     def subtrees(self):
         l = list()

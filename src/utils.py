@@ -44,3 +44,8 @@ def write_pkl_bz2(obj, fname):
 def get_line_num(path):
     num = sum(1 for _ in open(path))
     return num
+
+def time_format(elapsed):
+    hours, rem = divmod(elapsed, 3600)
+    minutes, seconds = divmod(rem, 60)
+    return'{:0>2}:{:0>2}:{:05.2f}'.format(int(hours),int(minutes),seconds)

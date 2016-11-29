@@ -9,16 +9,8 @@ class Vocablary:
         self.__id2word = dict()
         self.embed_model = None
 
-    def read_vocabf(self, *vocab_files):
-        for vocabf in vocab_files:
-            for word in open(vocabf):
-                word = word[:-1]
-                self.__word2id[word]
-                self.__id2word[self.__word2id[word]] = word
-        self.__word2id = dict(self.__word2id)
-
-    def read_vocabl(self, vocabl):
-        for word in vocabl:
+    def read_vocab(self, vocab):
+        for word in vocab:
             self.__word2id[word]
             self.__id2word[self.__word2id[word]] = word
         self.__word2id = dict(self.__word2id)
@@ -30,8 +22,12 @@ class Vocablary:
         return word in self.__word2id
 
     def word2id(self, word):
-        assert word in self.__word2id, '{} not in vocablary'.format(word)
+        if word not in self.__word2id:
+            return self.__word2id['##unk##']
         return self.__word2id[word]
+
+    def is_unk_id(self, wordid):
+        return wordid == self.__word2id['##unk##']
 
     def id2word(self, num):
         assert num in self.__id2word, 'index {} out of range'.format(num)
